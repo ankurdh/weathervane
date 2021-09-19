@@ -23,6 +23,8 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import io.micrometer.core.instrument.Metrics;
+import io.micrometer.core.instrument.Timer;
 import org.json.JSONObject;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -44,6 +46,8 @@ import io.netty.handler.codec.http.HttpResponseStatus;
  * 
  */
 public abstract class Operation implements Runnable, HttpRequestCompleteCallback {
+	private Timer successfulOperationTimer;
+	private Timer failedOperationTimer;
 
 	private static final Logger logger = LoggerFactory.getLogger(Operation.class);
 	
@@ -209,6 +213,9 @@ public abstract class Operation implements Runnable, HttpRequestCompleteCallback
 	
 	private long _timeStarted           = 0;
 	private long _timeFinished          = 0;
+
+	// Define a micrometer time sampler
+	private Timer.Sample micrometerTimerSampler = null;
 	
 	private Random _randomNumberGenerator;
 	
@@ -246,6 +253,14 @@ public abstract class Operation implements Runnable, HttpRequestCompleteCallback
 	 */
 	public Operation(User userState,
 			Behavior behavior, Target target, StatsCollector statsCollector) {
+		successfulOperationTimer = Timer.builder("operation.time")
+				.tag("operation", provideOperationName())
+				.tag("status", "success")
+				.register(Metrics.globalRegistry);
+		failedOperationTimer = Timer.builder("operation.time")
+				.tag("operation", provideOperationName())
+				.tag("status", "failed")
+				.register(Metrics.globalRegistry);
 		setOperationName(provideOperationName());
 		setUser(userState);
 		_behavior = behavior;
@@ -395,6 +410,7 @@ public abstract class Operation implements Runnable, HttpRequestCompleteCallback
 			 * execution
 			 */
 			long now = System.currentTimeMillis();
+			this.startMicrometerTimer();
 			this.setTimeStarted(now);
 			this.setFailed(false);
 
@@ -643,6 +659,7 @@ public abstract class Operation implements Runnable, HttpRequestCompleteCallback
 			logger.debug("Operation complete for " + getOperationName() + " for behavior UUID "
 					+ _behavior.getBehaviorId() );
 			long now = System.currentTimeMillis();
+			stopMicrometerTimer(this.isFailed());
 			this.setTimeFinished(now);
 
 			logger.debug("Submitting operationStats to statsCollector for operation " + getOperationName() + " for behavior UUID "
@@ -1150,6 +1167,19 @@ public abstract class Operation implements Runnable, HttpRequestCompleteCallback
 	public void setTimeStarted( long val ) { this._timeStarted = val; }
 	public long getTimeFinished() { return this._timeFinished; }
 	public void setTimeFinished( long val ) { this._timeFinished = val; }
+
+	public void startMicrometerTimer() {
+		logger.trace("Starting micrometer timer");
+		this.micrometerTimerSampler = Timer.start(Metrics.globalRegistry);
+	}
+	public void stopMicrometerTimer(boolean isFailed) {
+		logger.trace("Stopping micrometer timer");
+		if (isFailed) {
+			this.micrometerTimerSampler.stop(failedOperationTimer);
+		} else {
+			this.micrometerTimerSampler.stop(successfulOperationTimer);
+		}
+	}
 
 	public HttpResponseStatus getCurrentResponseStatus() {
 		return _currentResponseStatus;

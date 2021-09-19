@@ -5,6 +5,7 @@ dist
 .csv
 .DS_Store
 .accept-weathervane
+.idea
 
 # Created by https://www.gitignore.io/api/java,perl,gradle,eclipse,emacs
 
