@@ -310,7 +310,12 @@ project(':workloadDriver') {
 	}
 	
 	dependencies {
-		runtimeOnly 'io.micrometer:micrometer-registry-wavefront:1.4.1'
+		compile 'io.micrometer:micrometer-registry-wavefront:latest.release'
+		compile 'io.micrometer:micrometer-spring-legacy:latest.release'
+
+//		Might be beneficial if we can just do prometheus and all users can
+//		configure prometheus to pull metrics from /prometheus
+//		compile 'io.micrometer:micrometer-registry-prometheus:latest.release'
 
 		compile "io.netty:netty-all:$nettyVersion"
 		compile "io.netty:netty-tcnative:2.0.25.Final:linux-x86_64-fedora"
